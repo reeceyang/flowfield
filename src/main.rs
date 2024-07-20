@@ -38,22 +38,22 @@ impl Body {
     fn bounds_clamp(&mut self) {
         if self.pos.x < 0.0 {
             self.pos.x = 0.0;
-            self.vel.x = 0.0;
+            self.vel.x *= -BOUNCE_BOOST;
             self.acc.x = 0.0;
         }
         if self.pos.x > screen_width() {
             self.pos.x = screen_width();
-            self.vel.x = 0.0;
+            self.vel.x *= -BOUNCE_BOOST;
             self.acc.x = 0.0;
         }
         if self.pos.y < 0.0 {
             self.pos.y = 0.0;
-            self.vel.y = 0.0;
+            self.vel.y *= -BOUNCE_BOOST;
             self.acc.y = 0.0;
         }
         if self.pos.y > screen_height() {
             self.pos.y = screen_height();
-            self.vel.y = 0.0;
+            self.vel.y *= -BOUNCE_BOOST;
             self.acc.y = 0.0;
         }
     }
@@ -69,6 +69,7 @@ const VECTOR_FIELD_SCALAR: f32 = 0.01;
 const ENEMY_RADIUS: f32 = 50.0;
 const MAX_ENEMIES: usize = 5;
 const SHOOT_SCORE_PENALTY: f64 = 0.1;
+const BOUNCE_BOOST: f32 = 1.0;
 
 fn translate_pos(pos: Vec2) -> Vec2 {
     pos - Vec2::new(screen_width() / 2.0, screen_height() / 2.0)
@@ -84,7 +85,8 @@ fn draw_vector_field() {
         for y in (0..screen_height() as i32).step_by(50) {
             let start = Vec2::new(x as f32, y as f32);
             let force = 0.01 * get_vector_field_force(start);
-            let end = start + force;
+            let end = start - force;
+            draw_circle(start.x, start.y, 2.0, Color::from_hex(0xDDA15E));
             draw_line(
                 start.x,
                 start.y,
@@ -135,7 +137,7 @@ async fn main() {
             .subsec_nanos()
             .into(),
     );
-    request_new_screen_size(1000.0, 1000.0);
+    set_fullscreen(true);
 
     let mut player = Body::new(
         Vec2::new(screen_width() - 30.0, screen_height() - 30.0),
@@ -249,12 +251,7 @@ async fn main() {
             )
         });
 
-        draw_text_ll(
-            &format!("score {}", score),
-            screen_width() - 100.0,
-            screen_height(),
-            font.as_ref(),
-        );
+        draw_text_at(&format!("score {:.1}", score), 0.0, 20.0, font.as_ref());
         draw_text_ll(
             "WASD to move, point and click to shoot",
             0.0,

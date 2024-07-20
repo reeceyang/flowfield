@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use macroquad::prelude::*;
@@ -73,7 +74,6 @@ const FRICTION: f32 = 800.0;
 const VECTOR_FIELD_SCALAR: f32 = 0.01;
 const ENEMY_RADIUS: f32 = 50.0;
 const MAX_ENEMIES: usize = 5;
-const SHOOT_SCORE_PENALTY: f64 = 0.1;
 const BOUNCE_BOOST: f32 = 1.0;
 const GAME_TIME_SECS: f32 = 30.0;
 
@@ -83,11 +83,13 @@ fn translate_pos(pos: Vec2) -> Vec2 {
 
 type VectorFieldGetter = fn(macroquad::math::Vec2) -> macroquad::math::Vec2;
 
+const DUAL_VISION: &'static str = "dual vision";
 fn get_vector_field_force_basic(pos: Vec2) -> Vec2 {
     let Vec2 { x, y } = translate_pos(pos);
     VECTOR_FIELD_SCALAR * Vec2::new(x * x - y * y - 4.0, 2.0 * x * y)
 }
 
+const CURL_VALLEY: &'static str = "curl valley";
 fn get_vector_field_force_curl_noise(pos: Vec2) -> Vec2 {
     const DERIVATIVE_SAMPLE: f64 = 0.001;
     let Vec2 { x: _x, y: _y } = translate_pos(pos) / 400.0;
@@ -104,6 +106,7 @@ fn get_vector_field_force_curl_noise(pos: Vec2) -> Vec2 {
     1000.0 * Vec2::from_angle(angle as f32)
 }
 
+const CLOCKBACK: &'static str = "clockback";
 fn get_vector_field_force_circular(pos: Vec2) -> Vec2 {
     let Vec2 { x, y } = translate_pos(pos) / 400.0;
     let angle = (-y / x).atan();
@@ -163,6 +166,10 @@ fn draw_text_at(text: &str, x: f32, y: f32, font_size: u16, font: Option<&Font>)
     );
 }
 
+fn draw_score_at(text: &str, x: f32, y: f32, font: Option<&Font>) {
+    draw_text_at(text, x, y, 12, font);
+}
+
 #[derive(PartialEq)]
 enum Stage {
     Home,
@@ -173,10 +180,6 @@ enum Stage {
 #[macroquad::main("flowfield")]
 async fn main() {
     let font = load_ttf_font("./DMSans-Regular.ttf").await.ok();
-    let mut stage = Stage::Home;
-
-    let mut secs_left = GAME_TIME_SECS;
-
     srand(
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -186,15 +189,19 @@ async fn main() {
     );
     set_fullscreen(true);
 
+    let mut session_best_scores: HashMap<&'static str, i32> = HashMap::new();
+    let mut stage = Stage::Home;
+    let mut current_map = DUAL_VISION;
+    let mut get_vector_field_force: VectorFieldGetter = get_vector_field_force_basic;
+
+    let mut secs_left = GAME_TIME_SECS;
     let mut player = Body::new(
         Vec2::new(screen_width() - 30.0, screen_height() - 30.0),
         Vec2::ZERO,
         Vec2::ZERO,
     );
-
     let mut projectiles: Vec<Body> = vec![];
     let mut enemies: Vec<Body> = vec![];
-    let mut get_vector_field_force: VectorFieldGetter = get_vector_field_force_basic;
     let mut num_projectiles = 0;
     let mut num_enemies_shot = 0;
 
@@ -334,15 +341,36 @@ async fn main() {
                 num_projectiles = 0;
                 enemies = vec![];
             }
-            if root_ui().button(Some(Vec2::new(80.0, 300.0)), "dual vision") {
+
+            draw_score_at("session best", 5.0, 400.0, font.as_ref());
+
+            if root_ui().button(Some(Vec2::new(80.0, 300.0)), DUAL_VISION) {
+                current_map = DUAL_VISION;
                 get_vector_field_force = get_vector_field_force_basic;
             }
-            if root_ui().button(Some(Vec2::new(240.0, 300.0)), "curl valley") {
+            let score = &session_best_scores
+                .get(DUAL_VISION)
+                .map_or("unplayed".to_owned(), |score| format!("{}", score));
+            draw_score_at(score, 80.0, 400.0, font.as_ref());
+
+            if root_ui().button(Some(Vec2::new(240.0, 300.0)), CURL_VALLEY) {
+                current_map = CURL_VALLEY;
                 get_vector_field_force = get_vector_field_force_curl_noise;
             }
-            if root_ui().button(Some(Vec2::new(400.0, 300.0)), "clockback") {
+            let score = &session_best_scores
+                .get(CURL_VALLEY)
+                .map_or("unplayed".to_owned(), |score| format!("{}", score));
+            draw_score_at(score, 240.0, 400.0, font.as_ref());
+
+            if root_ui().button(Some(Vec2::new(400.0, 300.0)), CLOCKBACK) {
+                current_map = CLOCKBACK;
                 get_vector_field_force = get_vector_field_force_circular;
             }
+            let score = &session_best_scores
+                .get(CLOCKBACK)
+                .map_or("unplayed".to_owned(), |score| format!("{}", score));
+            draw_score_at(score, 400.0, 400.0, font.as_ref());
+
             draw_text_ll(
                 "WASD to move, point and click to shoot",
                 80.0,
@@ -352,21 +380,30 @@ async fn main() {
         }
 
         if stage == Stage::End {
+            let final_score = 100 * (num_enemies_shot as i32) - num_projectiles;
+            let previous = session_best_scores.get(current_map).unwrap_or(&i32::MIN);
+            session_best_scores.insert(current_map, final_score.max(*previous));
             draw_text_at("game over", 80.0, 200.0, 100, font.as_ref());
             draw_text_ul(
-                &format!("enemies shot {}", num_enemies_shot),
+                &format!("enemies shot 100 x {}", num_enemies_shot),
                 80.0,
                 300.0,
                 font.as_ref(),
             );
             draw_text_ul(
-                &format!("projectiles used {}", num_projectiles),
+                &format!("projectiles used -1 x {}", num_projectiles),
                 80.0,
                 400.0,
                 font.as_ref(),
             );
+            draw_text_ul(
+                &format!("final score {:0}", final_score),
+                80.0,
+                500.0,
+                font.as_ref(),
+            );
 
-            if root_ui().button(Some(Vec2::new(80.0, 500.0)), "continue") {
+            if root_ui().button(Some(Vec2::new(80.0, 600.0)), "continue") {
                 stage = Stage::Home;
             }
         }

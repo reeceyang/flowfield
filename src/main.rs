@@ -25,6 +25,13 @@ impl Body {
         self.pos += dt * self.vel;
     }
 
+    fn is_in_bounds(&self) -> bool {
+        self.pos.x >= 0.0
+            && self.pos.x <= screen_width()
+            && self.pos.y >= 0.0
+            && self.pos.y <= screen_height()
+    }
+
     fn bounds_clamp(&mut self) {
         if self.pos.x < 0.0 {
             self.pos.x = 0.0;
@@ -134,6 +141,8 @@ async fn main() {
         projectiles
             .iter_mut()
             .for_each(|projectile| projectile.update_position(dt));
+
+        projectiles.retain(|projectile| projectile.is_in_bounds());
 
         draw_circle(player.pos.x, player.pos.y, 15.0, Color::from_hex(0x22577a));
         projectiles.iter().for_each(|projectile| {

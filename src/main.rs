@@ -53,6 +53,34 @@ const PLAYER_MOVEMENT: f32 = 1000.0;
 const PLAYER_MAX_MOVEMENT_SPEED: f32 = 1000.0;
 const PROJECTILE_INIT_SPEED: f32 = 1.5 * PLAYER_MAX_MOVEMENT_SPEED;
 const FRICTION: f32 = 800.0;
+const VECTOR_FIELD_SCALAR: f32 = 0.01;
+
+fn translate_pos(pos: Vec2) -> Vec2 {
+    pos - Vec2::new(screen_width() / 2.0, screen_height() / 2.0)
+}
+
+fn get_vector_field_force(pos: Vec2) -> Vec2 {
+    let Vec2 { x, y } = translate_pos(pos);
+    VECTOR_FIELD_SCALAR * Vec2::new(x * x - y * y - 4.0, 2.0 * x * y)
+}
+
+fn draw_vector_field() {
+    for x in (0..screen_width() as i32).step_by(50) {
+        for y in (0..screen_height() as i32).step_by(50) {
+            let start = Vec2::new(x as f32, y as f32);
+            let force = 0.01 * get_vector_field_force(start);
+            let end = start + force;
+            draw_line(
+                start.x,
+                start.y,
+                end.x,
+                end.y,
+                1.0,
+                Color::from_hex(0xDDA15E),
+            )
+        }
+    }
+}
 
 #[macroquad::main("flowfield")]
 async fn main() {
@@ -69,6 +97,7 @@ async fn main() {
     loop {
         let dt = get_frame_time();
         clear_background(Color::from_hex(0xFEFAE0));
+        draw_vector_field();
 
         player.acc = Vec2::ZERO;
 
@@ -87,6 +116,7 @@ async fn main() {
 
         player.acc += -player.vel.normalize_or_zero() * FRICTION * player.vel.length()
             / PLAYER_MAX_MOVEMENT_SPEED;
+        player.acc += get_vector_field_force(player.pos);
 
         player.bounds_clamp();
         player.update_position(dt);
@@ -96,6 +126,10 @@ async fn main() {
             let init_vel = init_dir.normalize_or(Vec2::X) * PROJECTILE_INIT_SPEED;
             projectiles.push(Body::new(player.pos, init_vel, Vec2::ZERO));
         }
+
+        projectiles
+            .iter_mut()
+            .for_each(|projectile| projectile.acc += get_vector_field_force(projectile.pos));
 
         projectiles
             .iter_mut()

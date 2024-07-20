@@ -2,15 +2,18 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use macroquad::prelude::*;
 use macroquad::rand::*;
+use macroquad::ui::root_ui;
 
-// you should be able to move around
-// you should be able to shoot projectiles
-// the projectiles should follow vector field
-// maybe vector field should also affect player velocity
-// there should be enemies
-// enemies also move around
-// hitting enemies increases your score
-// there's a time limit
+// there's a menu
+// you can choose different field
+// there's an end screen with stats
+// you can view session best
+// you can submit score to db from end screen
+// you can view top scores from db
+// hit objects fade away?
+// music (maybe we can have lowpassed menu music)
+// sfx
+// make stuff look better idk
 
 struct Body {
     pos: Vec2,
@@ -70,6 +73,7 @@ const ENEMY_RADIUS: f32 = 50.0;
 const MAX_ENEMIES: usize = 5;
 const SHOOT_SCORE_PENALTY: f64 = 0.1;
 const BOUNCE_BOOST: f32 = 1.0;
+const GAME_TIME_SECS: f32 = 30.0;
 
 fn translate_pos(pos: Vec2) -> Vec2 {
     pos - Vec2::new(screen_width() / 2.0, screen_height() / 2.0)
@@ -103,32 +107,45 @@ const FONT_SIZE: u16 = 40;
 
 fn draw_text_ll(text: &str, x: f32, y: f32, font: Option<&Font>) {
     let size = measure_text(text, font, FONT_SIZE, 1.0);
-    draw_text_at(text, x, y - size.height, font)
+    draw_text_at(text, x, y - size.height, FONT_SIZE, font)
 }
 
 fn draw_text_ur(text: &str, x: f32, y: f32, font: Option<&Font>) {
     let size = measure_text(text, font, FONT_SIZE, 1.0);
-    draw_text_at(text, x - size.width, y, font)
+    draw_text_at(text, x - size.width, y, FONT_SIZE, font)
 }
 
-fn draw_text_at(text: &str, x: f32, y: f32, font: Option<&Font>) {
+fn draw_text_ul(text: &str, x: f32, y: f32, font: Option<&Font>) {
+    draw_text_at(text, x, y, FONT_SIZE, font)
+}
+
+fn draw_text_at(text: &str, x: f32, y: f32, font_size: u16, font: Option<&Font>) {
     draw_text_ex(
         text,
         x,
         y,
         TextParams {
-            font_size: FONT_SIZE,
-            font: font,
+            font_size,
+            font,
             color: Color::from_hex(0x101010),
             ..Default::default()
         },
     );
 }
 
+#[derive(PartialEq)]
+enum Stage {
+    Home,
+    Play,
+    End,
+}
+
 #[macroquad::main("flowfield")]
 async fn main() {
     let font = load_ttf_font("./DMSans-Regular.ttf").await.ok();
-    let mut secs_left = 60.0;
+    let mut stage = Stage::Home;
+
+    let mut secs_left = GAME_TIME_SECS;
     let mut score = 0.0;
 
     srand(
@@ -212,67 +229,78 @@ async fn main() {
             )
         });
 
-        // ENEMIES
-        if enemies.len() < MAX_ENEMIES {
-            let pos_l = Vec2::new(-ENEMY_RADIUS, (rand() % screen_height() as u32) as f32);
-            let pos_r = Vec2::new(
-                screen_width() + ENEMY_RADIUS,
-                (rand() % screen_height() as u32) as f32,
+        if stage == Stage::Play {
+            // ENEMIES
+            if enemies.len() < MAX_ENEMIES {
+                let pos_l = Vec2::new(-ENEMY_RADIUS, (rand() % screen_height() as u32) as f32);
+                let pos_r = Vec2::new(
+                    screen_width() + ENEMY_RADIUS,
+                    (rand() % screen_height() as u32) as f32,
+                );
+                let pos_u = Vec2::new((rand() % screen_height() as u32) as f32, -ENEMY_RADIUS);
+                let pos_d = Vec2::new(
+                    (rand() % screen_height() as u32) as f32,
+                    screen_height() + ENEMY_RADIUS,
+                );
+                let pos = [pos_d, pos_l, pos_r, pos_u][(rand() % 4) as usize];
+                let dir = player.pos - pos;
+                let vel = dir.normalize_or(Vec2::Y) * ENEMY_INIT_SPEED;
+                let enemy = Body::new(pos, vel, Vec2::ZERO);
+                enemies.push(enemy);
+            }
+
+            enemies
+                .iter_mut()
+                .for_each(|enemy| enemy.acc += ENEMY_INERTIA * get_vector_field_force(enemy.pos));
+
+            enemies
+                .iter_mut()
+                .for_each(|enemy| enemy.update_position(dt));
+
+            enemies.retain(|enemy| {
+                enemy.pos.distance_squared(player.pos) <= screen_height() * screen_width()
+            });
+
+            enemies.iter().for_each(|enemy| {
+                draw_circle(
+                    enemy.pos.x,
+                    enemy.pos.y,
+                    ENEMY_RADIUS,
+                    Color::from_hex(0xBC6C25),
+                )
+            });
+
+            draw_text_ul(&format!("score {:.1}", score), 0.0, 40.0, font.as_ref());
+            draw_text_ur(
+                &format!("time left {:.1} s", secs_left),
+                screen_width(),
+                40.0,
+                font.as_ref(),
             );
-            let pos_u = Vec2::new((rand() % screen_height() as u32) as f32, -ENEMY_RADIUS);
-            let pos_d = Vec2::new(
-                (rand() % screen_height() as u32) as f32,
-                screen_height() + ENEMY_RADIUS,
-            );
-            let pos = [pos_d, pos_l, pos_r, pos_u][(rand() % 4) as usize];
-            let dir = player.pos - pos;
-            let vel = dir.normalize_or(Vec2::Y) * ENEMY_INIT_SPEED;
-            let enemy = Body::new(pos, vel, Vec2::ZERO);
-            enemies.push(enemy);
+
+            secs_left -= dt;
+            if secs_left <= 0.0 {
+                stage = Stage::Home;
+            }
         }
 
-        enemies
-            .iter_mut()
-            .for_each(|enemy| enemy.acc += ENEMY_INERTIA * get_vector_field_force(enemy.pos));
+        if stage == Stage::Home {
+            draw_text_at("flowfield", 80.0, 200.0, 100, font.as_ref());
+            if root_ui().button(Some(Vec2::new(80.0, 300.0)), "Play") {
+                stage = Stage::Play;
+                secs_left = GAME_TIME_SECS;
+                score = 0.0;
+                enemies = vec![];
+            }
+        }
 
-        enemies
-            .iter_mut()
-            .for_each(|enemy| enemy.update_position(dt));
-
-        enemies.retain(|enemy| {
-            enemy.pos.distance_squared(player.pos) <= screen_height() * screen_width()
-        });
-
-        enemies.iter().for_each(|enemy| {
-            draw_circle(
-                enemy.pos.x,
-                enemy.pos.y,
-                ENEMY_RADIUS,
-                Color::from_hex(0xBC6C25),
-            )
-        });
-
-        draw_text_at(&format!("score {:.1}", score), 0.0, 40.0, font.as_ref());
-        draw_text_ur(
-            &format!("time left {:.1} s", secs_left),
-            screen_width(),
-            40.0,
-            font.as_ref(),
-        );
         draw_text_ll(
             "WASD to move, point and click to shoot",
-            0.0,
+            80.0,
             screen_height(),
             font.as_ref(),
         );
 
-        secs_left -= dt;
-        if secs_left <= 0.0 {
-            break;
-        }
-
         next_frame().await
     }
-
-    loop {}
 }

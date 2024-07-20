@@ -3,6 +3,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use macroquad::prelude::*;
 use macroquad::rand::*;
 use macroquad::ui::root_ui;
+use noise::NoiseFn;
+use noise::OpenSimplex;
 
 // there's a menu
 // you can choose different field
@@ -65,7 +67,7 @@ impl Body {
 const PLAYER_MOVEMENT: f32 = 1000.0;
 const PLAYER_MAX_MOVEMENT_SPEED: f32 = 1000.0;
 const PROJECTILE_INIT_SPEED: f32 = 1.5 * PLAYER_MAX_MOVEMENT_SPEED;
-const ENEMY_INIT_SPEED: f32 = 0.1 * PLAYER_MAX_MOVEMENT_SPEED;
+const ENEMY_INIT_SPEED: f32 = 0.5 * PLAYER_MAX_MOVEMENT_SPEED;
 const ENEMY_INERTIA: f32 = 0.01;
 const FRICTION: f32 = 800.0;
 const VECTOR_FIELD_SCALAR: f32 = 0.01;
@@ -79,12 +81,40 @@ fn translate_pos(pos: Vec2) -> Vec2 {
     pos - Vec2::new(screen_width() / 2.0, screen_height() / 2.0)
 }
 
-fn get_vector_field_force(pos: Vec2) -> Vec2 {
+type VectorFieldGetter = fn(macroquad::math::Vec2) -> macroquad::math::Vec2;
+
+fn get_vector_field_force_basic(pos: Vec2) -> Vec2 {
     let Vec2 { x, y } = translate_pos(pos);
     VECTOR_FIELD_SCALAR * Vec2::new(x * x - y * y - 4.0, 2.0 * x * y)
 }
 
-fn draw_vector_field() {
+fn get_vector_field_force_curl_noise(pos: Vec2) -> Vec2 {
+    const DERIVATIVE_SAMPLE: f64 = 0.001;
+    let Vec2 { x: _x, y: _y } = translate_pos(pos) / 400.0;
+    let x = _x as f64;
+    let y = _y as f64;
+    let noise = OpenSimplex::new(1);
+    let x1 = noise.get([x + DERIVATIVE_SAMPLE, y]);
+    let x2 = noise.get([x - DERIVATIVE_SAMPLE, y]);
+    let y1 = noise.get([x, y + DERIVATIVE_SAMPLE]);
+    let y2 = noise.get([x, y - DERIVATIVE_SAMPLE]);
+    let x_d = x2 - x1;
+    let y_d = y2 - y1;
+    let angle = y_d.atan2(x_d);
+    1000.0 * Vec2::from_angle(angle as f32)
+}
+
+fn get_vector_field_force_circular(pos: Vec2) -> Vec2 {
+    let Vec2 { x, y } = translate_pos(pos) / 400.0;
+    let angle = (-y / x).atan();
+    if x < 0.0 {
+        2000.0 * -Vec2::from_angle(-angle).rotate(-Vec2::Y)
+    } else {
+        2000.0 * Vec2::from_angle(-angle).rotate(-Vec2::Y)
+    }
+}
+
+fn draw_vector_field(get_vector_field_force: VectorFieldGetter) {
     for x in (0..screen_width() as i32).step_by(50) {
         for y in (0..screen_height() as i32).step_by(50) {
             let start = Vec2::new(x as f32, y as f32);
@@ -165,11 +195,12 @@ async fn main() {
 
     let mut projectiles: Vec<Body> = vec![];
     let mut enemies: Vec<Body> = vec![];
+    let mut get_vector_field_force: VectorFieldGetter = get_vector_field_force_basic;
 
     loop {
         let dt = get_frame_time();
         clear_background(Color::from_hex(0xFEFAE0));
-        draw_vector_field();
+        draw_vector_field(get_vector_field_force);
 
         // PLAYER
         player.acc = Vec2::ZERO;
@@ -286,11 +317,20 @@ async fn main() {
 
         if stage == Stage::Home {
             draw_text_at("flowfield", 80.0, 200.0, 100, font.as_ref());
-            if root_ui().button(Some(Vec2::new(80.0, 300.0)), "Play") {
+            if root_ui().button(Some(Vec2::new(80.0, 500.0)), "Play") {
                 stage = Stage::Play;
                 secs_left = GAME_TIME_SECS;
                 score = 0.0;
                 enemies = vec![];
+            }
+            if root_ui().button(Some(Vec2::new(80.0, 300.0)), "dual vision") {
+                get_vector_field_force = get_vector_field_force_basic;
+            }
+            if root_ui().button(Some(Vec2::new(240.0, 300.0)), "curl valley") {
+                get_vector_field_force = get_vector_field_force_curl_noise;
+            }
+            if root_ui().button(Some(Vec2::new(400.0, 300.0)), "clockback") {
+                get_vector_field_force = get_vector_field_force_circular;
             }
         }
 

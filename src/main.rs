@@ -62,11 +62,13 @@ impl Body {
 const PLAYER_MOVEMENT: f32 = 1000.0;
 const PLAYER_MAX_MOVEMENT_SPEED: f32 = 1000.0;
 const PROJECTILE_INIT_SPEED: f32 = 1.5 * PLAYER_MAX_MOVEMENT_SPEED;
-const ENEMY_INIT_SPEED: f32 = 0.5 * PLAYER_MAX_MOVEMENT_SPEED;
+const ENEMY_INIT_SPEED: f32 = 0.1 * PLAYER_MAX_MOVEMENT_SPEED;
+const ENEMY_INERTIA: f32 = 0.01;
 const FRICTION: f32 = 800.0;
 const VECTOR_FIELD_SCALAR: f32 = 0.01;
 const ENEMY_RADIUS: f32 = 50.0;
 const MAX_ENEMIES: usize = 5;
+const SHOOT_SCORE_PENALTY: f64 = 0.1;
 
 fn translate_pos(pos: Vec2) -> Vec2 {
     pos - Vec2::new(screen_width() / 2.0, screen_height() / 2.0)
@@ -95,8 +97,37 @@ fn draw_vector_field() {
     }
 }
 
+const FONT_SIZE: u16 = 20;
+
+fn draw_text_ll(text: &str, x: f32, y: f32, font: Option<&Font>) {
+    let size = measure_text(text, font, FONT_SIZE, 1.0);
+    draw_text_at(text, x, y - size.height, font)
+}
+
+fn draw_text_ur(text: &str, x: f32, y: f32, font: Option<&Font>) {
+    let size = measure_text(text, font, FONT_SIZE, 1.0);
+    draw_text_at(text, x - size.width, y - size.height, font)
+}
+
+fn draw_text_at(text: &str, x: f32, y: f32, font: Option<&Font>) {
+    draw_text_ex(
+        text,
+        x,
+        y,
+        TextParams {
+            font_size: FONT_SIZE,
+            font: font,
+            color: Color::from_hex(0x101010),
+            ..Default::default()
+        },
+    );
+}
+
 #[macroquad::main("flowfield")]
 async fn main() {
+    let font = load_ttf_font("./DMSans-Regular.ttf").await.ok();
+    let mut score = 0.0;
+
     srand(
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -149,6 +180,7 @@ async fn main() {
             let init_dir = Vec2::from_array(mouse_position().into()) - player.pos;
             let init_vel = init_dir.normalize_or(Vec2::X) * PROJECTILE_INIT_SPEED;
             projectiles.push(Body::new(player.pos, init_vel, Vec2::ZERO));
+            score -= SHOOT_SCORE_PENALTY;
         }
 
         projectiles
@@ -162,6 +194,13 @@ async fn main() {
         projectiles.retain(|projectile| projectile.is_in_bounds());
 
         projectiles.iter().for_each(|projectile| {
+            let before = enemies.len();
+            enemies.retain(|enemy| enemy.pos.distance(projectile.pos) > ENEMY_RADIUS);
+            let after = enemies.len();
+            score += before as f64 - after as f64;
+        });
+
+        projectiles.iter().for_each(|projectile| {
             draw_circle(
                 projectile.pos.x,
                 projectile.pos.y,
@@ -172,24 +211,34 @@ async fn main() {
 
         // ENEMIES
         if enemies.len() < MAX_ENEMIES {
-            let x = rand() as f32 - (u32::MAX / 2) as f32;
-            let y = rand() as f32 - (u32::MAX / 2) as f32;
-            let dir = Vec2::new(x, y);
+            let pos_l = Vec2::new(-ENEMY_RADIUS, (rand() % screen_height() as u32) as f32);
+            let pos_r = Vec2::new(
+                screen_width() + ENEMY_RADIUS,
+                (rand() % screen_height() as u32) as f32,
+            );
+            let pos_u = Vec2::new((rand() % screen_height() as u32) as f32, -ENEMY_RADIUS);
+            let pos_d = Vec2::new(
+                (rand() % screen_height() as u32) as f32,
+                screen_height() + ENEMY_RADIUS,
+            );
+            let pos = [pos_d, pos_l, pos_r, pos_u][(rand() % 4) as usize];
+            let dir = player.pos - pos;
             let vel = dir.normalize_or(Vec2::Y) * ENEMY_INIT_SPEED;
-            let pos = translate_pos(Vec2::new(screen_width(), screen_height()));
             let enemy = Body::new(pos, vel, Vec2::ZERO);
             enemies.push(enemy);
         }
 
         enemies
             .iter_mut()
-            .for_each(|enemy| enemy.acc += get_vector_field_force(enemy.pos));
+            .for_each(|enemy| enemy.acc += ENEMY_INERTIA * get_vector_field_force(enemy.pos));
 
         enemies
             .iter_mut()
             .for_each(|enemy| enemy.update_position(dt));
 
-        enemies.retain(|enemy| enemy.is_in_bounds());
+        enemies.retain(|enemy| {
+            enemy.pos.distance_squared(player.pos) <= screen_height() * screen_width()
+        });
 
         enemies.iter().for_each(|enemy| {
             draw_circle(
@@ -199,6 +248,19 @@ async fn main() {
                 Color::from_hex(0xBC6C25),
             )
         });
+
+        draw_text_ll(
+            &format!("score {}", score),
+            screen_width() - 100.0,
+            screen_height(),
+            font.as_ref(),
+        );
+        draw_text_ll(
+            "WASD to move, point and click to shoot",
+            0.0,
+            screen_height(),
+            font.as_ref(),
+        );
 
         next_frame().await
     }

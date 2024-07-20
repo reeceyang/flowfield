@@ -176,7 +176,6 @@ async fn main() {
     let mut stage = Stage::Home;
 
     let mut secs_left = GAME_TIME_SECS;
-    let mut score = 0.0;
 
     srand(
         SystemTime::now()
@@ -196,6 +195,8 @@ async fn main() {
     let mut projectiles: Vec<Body> = vec![];
     let mut enemies: Vec<Body> = vec![];
     let mut get_vector_field_force: VectorFieldGetter = get_vector_field_force_basic;
+    let mut num_projectiles = 0;
+    let mut num_enemies_shot = 0;
 
     loop {
         let dt = get_frame_time();
@@ -231,7 +232,9 @@ async fn main() {
             let init_dir = Vec2::from_array(mouse_position().into()) - player.pos;
             let init_vel = init_dir.normalize_or(Vec2::X) * PROJECTILE_INIT_SPEED;
             projectiles.push(Body::new(player.pos, init_vel, Vec2::ZERO));
-            score -= SHOOT_SCORE_PENALTY;
+            if stage == Stage::Play {
+                num_projectiles += 1;
+            }
         }
 
         projectiles
@@ -248,7 +251,9 @@ async fn main() {
             let before = enemies.len();
             enemies.retain(|enemy| enemy.pos.distance(projectile.pos) > ENEMY_RADIUS);
             let after = enemies.len();
-            score += before as f64 - after as f64;
+            if stage == Stage::Play {
+                num_enemies_shot += before - after;
+            }
         });
 
         projectiles.iter().for_each(|projectile| {
@@ -301,7 +306,12 @@ async fn main() {
                 )
             });
 
-            draw_text_ul(&format!("score {:.1}", score), 0.0, 40.0, font.as_ref());
+            draw_text_ul(
+                &format!("enemies shot {:.1}", num_enemies_shot),
+                0.0,
+                40.0,
+                font.as_ref(),
+            );
             draw_text_ur(
                 &format!("time left {:.1} s", secs_left),
                 screen_width(),
@@ -311,16 +321,17 @@ async fn main() {
 
             secs_left -= dt;
             if secs_left <= 0.0 {
-                stage = Stage::Home;
+                stage = Stage::End;
             }
         }
 
         if stage == Stage::Home {
             draw_text_at("flowfield", 80.0, 200.0, 100, font.as_ref());
-            if root_ui().button(Some(Vec2::new(80.0, 500.0)), "Play") {
+            if root_ui().button(Some(Vec2::new(80.0, 500.0)), "play") {
                 stage = Stage::Play;
                 secs_left = GAME_TIME_SECS;
-                score = 0.0;
+                num_enemies_shot = 0;
+                num_projectiles = 0;
                 enemies = vec![];
             }
             if root_ui().button(Some(Vec2::new(80.0, 300.0)), "dual vision") {
@@ -332,14 +343,33 @@ async fn main() {
             if root_ui().button(Some(Vec2::new(400.0, 300.0)), "clockback") {
                 get_vector_field_force = get_vector_field_force_circular;
             }
+            draw_text_ll(
+                "WASD to move, point and click to shoot",
+                80.0,
+                screen_height(),
+                font.as_ref(),
+            );
         }
 
-        draw_text_ll(
-            "WASD to move, point and click to shoot",
-            80.0,
-            screen_height(),
-            font.as_ref(),
-        );
+        if stage == Stage::End {
+            draw_text_at("game over", 80.0, 200.0, 100, font.as_ref());
+            draw_text_ul(
+                &format!("enemies shot {}", num_enemies_shot),
+                80.0,
+                300.0,
+                font.as_ref(),
+            );
+            draw_text_ul(
+                &format!("projectiles used {}", num_projectiles),
+                80.0,
+                400.0,
+                font.as_ref(),
+            );
+
+            if root_ui().button(Some(Vec2::new(80.0, 500.0)), "continue") {
+                stage = Stage::Home;
+            }
+        }
 
         next_frame().await
     }

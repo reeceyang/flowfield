@@ -1,4 +1,7 @@
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use macroquad::prelude::*;
+use macroquad::rand::*;
 
 // you should be able to move around
 // you should be able to shoot projectiles
@@ -59,8 +62,11 @@ impl Body {
 const PLAYER_MOVEMENT: f32 = 1000.0;
 const PLAYER_MAX_MOVEMENT_SPEED: f32 = 1000.0;
 const PROJECTILE_INIT_SPEED: f32 = 1.5 * PLAYER_MAX_MOVEMENT_SPEED;
+const ENEMY_INIT_SPEED: f32 = 0.5 * PLAYER_MAX_MOVEMENT_SPEED;
 const FRICTION: f32 = 800.0;
 const VECTOR_FIELD_SCALAR: f32 = 0.01;
+const ENEMY_RADIUS: f32 = 50.0;
+const MAX_ENEMIES: usize = 5;
 
 fn translate_pos(pos: Vec2) -> Vec2 {
     pos - Vec2::new(screen_width() / 2.0, screen_height() / 2.0)
@@ -91,6 +97,13 @@ fn draw_vector_field() {
 
 #[macroquad::main("flowfield")]
 async fn main() {
+    srand(
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .subsec_nanos()
+            .into(),
+    );
     request_new_screen_size(1000.0, 1000.0);
 
     let mut player = Body::new(
@@ -100,12 +113,14 @@ async fn main() {
     );
 
     let mut projectiles: Vec<Body> = vec![];
+    let mut enemies: Vec<Body> = vec![];
 
     loop {
         let dt = get_frame_time();
         clear_background(Color::from_hex(0xFEFAE0));
         draw_vector_field();
 
+        // PLAYER
         player.acc = Vec2::ZERO;
 
         if is_key_down(KeyCode::D) {
@@ -127,7 +142,9 @@ async fn main() {
 
         player.bounds_clamp();
         player.update_position(dt);
+        draw_circle(player.pos.x, player.pos.y, 15.0, Color::from_hex(0x22577a));
 
+        // PROJECTILES
         if is_mouse_button_down(MouseButton::Left) {
             let init_dir = Vec2::from_array(mouse_position().into()) - player.pos;
             let init_vel = init_dir.normalize_or(Vec2::X) * PROJECTILE_INIT_SPEED;
@@ -144,13 +161,42 @@ async fn main() {
 
         projectiles.retain(|projectile| projectile.is_in_bounds());
 
-        draw_circle(player.pos.x, player.pos.y, 15.0, Color::from_hex(0x22577a));
         projectiles.iter().for_each(|projectile| {
             draw_circle(
                 projectile.pos.x,
                 projectile.pos.y,
                 5.0,
                 Color::from_hex(0xbc4749),
+            )
+        });
+
+        // ENEMIES
+        if enemies.len() < MAX_ENEMIES {
+            let x = rand() as f32 - (u32::MAX / 2) as f32;
+            let y = rand() as f32 - (u32::MAX / 2) as f32;
+            let dir = Vec2::new(x, y);
+            let vel = dir.normalize_or(Vec2::Y) * ENEMY_INIT_SPEED;
+            let pos = translate_pos(Vec2::new(screen_width(), screen_height()));
+            let enemy = Body::new(pos, vel, Vec2::ZERO);
+            enemies.push(enemy);
+        }
+
+        enemies
+            .iter_mut()
+            .for_each(|enemy| enemy.acc += get_vector_field_force(enemy.pos));
+
+        enemies
+            .iter_mut()
+            .for_each(|enemy| enemy.update_position(dt));
+
+        enemies.retain(|enemy| enemy.is_in_bounds());
+
+        enemies.iter().for_each(|enemy| {
+            draw_circle(
+                enemy.pos.x,
+                enemy.pos.y,
+                ENEMY_RADIUS,
+                Color::from_hex(0xBC6C25),
             )
         });
 

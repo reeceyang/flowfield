@@ -38,22 +38,22 @@ impl Body {
     fn bounds_clamp(&mut self) {
         if self.pos.x < 0.0 {
             self.pos.x = 0.0;
-            self.vel.x *= -BOUNCE_BOOST;
+            self.vel.x = BOUNCE_BOOST * PLAYER_MAX_MOVEMENT_SPEED;
             self.acc.x = 0.0;
         }
         if self.pos.x > screen_width() {
             self.pos.x = screen_width();
-            self.vel.x *= -BOUNCE_BOOST;
+            self.vel.x = -BOUNCE_BOOST * PLAYER_MAX_MOVEMENT_SPEED;
             self.acc.x = 0.0;
         }
         if self.pos.y < 0.0 {
             self.pos.y = 0.0;
-            self.vel.y *= -BOUNCE_BOOST;
+            self.vel.y = BOUNCE_BOOST * PLAYER_MAX_MOVEMENT_SPEED;
             self.acc.y = 0.0;
         }
         if self.pos.y > screen_height() {
             self.pos.y = screen_height();
-            self.vel.y *= -BOUNCE_BOOST;
+            self.vel.y = -BOUNCE_BOOST * PLAYER_MAX_MOVEMENT_SPEED;
             self.acc.y = 0.0;
         }
     }

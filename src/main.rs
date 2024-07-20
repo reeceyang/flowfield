@@ -99,7 +99,7 @@ fn draw_vector_field() {
     }
 }
 
-const FONT_SIZE: u16 = 20;
+const FONT_SIZE: u16 = 40;
 
 fn draw_text_ll(text: &str, x: f32, y: f32, font: Option<&Font>) {
     let size = measure_text(text, font, FONT_SIZE, 1.0);
@@ -108,7 +108,7 @@ fn draw_text_ll(text: &str, x: f32, y: f32, font: Option<&Font>) {
 
 fn draw_text_ur(text: &str, x: f32, y: f32, font: Option<&Font>) {
     let size = measure_text(text, font, FONT_SIZE, 1.0);
-    draw_text_at(text, x - size.width, y - size.height, font)
+    draw_text_at(text, x - size.width, y, font)
 }
 
 fn draw_text_at(text: &str, x: f32, y: f32, font: Option<&Font>) {
@@ -128,6 +128,7 @@ fn draw_text_at(text: &str, x: f32, y: f32, font: Option<&Font>) {
 #[macroquad::main("flowfield")]
 async fn main() {
     let font = load_ttf_font("./DMSans-Regular.ttf").await.ok();
+    let mut secs_left = 60.0;
     let mut score = 0.0;
 
     srand(
@@ -251,7 +252,13 @@ async fn main() {
             )
         });
 
-        draw_text_at(&format!("score {:.1}", score), 0.0, 20.0, font.as_ref());
+        draw_text_at(&format!("score {:.1}", score), 0.0, 40.0, font.as_ref());
+        draw_text_ur(
+            &format!("time left {:.1} s", secs_left),
+            screen_width(),
+            40.0,
+            font.as_ref(),
+        );
         draw_text_ll(
             "WASD to move, point and click to shoot",
             0.0,
@@ -259,6 +266,13 @@ async fn main() {
             font.as_ref(),
         );
 
+        secs_left -= dt;
+        if secs_left <= 0.0 {
+            break;
+        }
+
         next_frame().await
     }
+
+    loop {}
 }

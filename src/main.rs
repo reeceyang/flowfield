@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use macroquad::prelude::*;
 use macroquad::rand::*;
@@ -180,13 +179,6 @@ enum Stage {
 #[macroquad::main("flowfield")]
 async fn main() {
     let font = load_ttf_font("./DMSans-Regular.ttf").await.ok();
-    srand(
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .subsec_nanos()
-            .into(),
-    );
     set_fullscreen(true);
 
     let mut session_best_scores: HashMap<&'static str, i32> = HashMap::new();

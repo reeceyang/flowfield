@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.86"
-macroquad = "0.4"
+macroquad = { version = "0.4", features = ["audio"] }
 noise = "0.9"
 reqwest = { version = "0.12.5", features = ["blocking"]}
 serde = { version = "1.0", features = ["derive"] }

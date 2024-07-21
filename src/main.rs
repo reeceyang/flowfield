@@ -1,5 +1,8 @@
 use std::collections::HashMap;
 
+use macroquad::audio;
+use macroquad::audio::play_sound_once;
+use macroquad::audio::Sound;
 use macroquad::prelude::*;
 use macroquad::rand::*;
 use macroquad::ui::hash;
@@ -214,6 +217,14 @@ fn draw_top_scores(scores: &Vec<Score>, x: f32, font: Option<&Font>) {
     })
 }
 
+async fn load_hit_sounds(sounds: &mut Vec<Sound>) {
+    for i in 1..(12 + 1) {
+        if let Ok(sound) = audio::load_sound(&format!("sfx/hit {}.wav", i)).await {
+            sounds.push(sound)
+        }
+    }
+}
+
 #[macroquad::main("flowfield")]
 async fn main() {
     let font = load_ttf_font("./DMSans-Regular.ttf").await.ok();
@@ -241,6 +252,9 @@ async fn main() {
     let mut player_initials: String = String::new();
     let reqwest_client = reqwest::blocking::Client::new();
     let mut score_submitted = false;
+
+    let mut hit_sounds: Vec<Sound> = vec![];
+    load_hit_sounds(&mut hit_sounds).await;
 
     loop {
         let dt = get_frame_time();
@@ -297,6 +311,11 @@ async fn main() {
             let after = enemies.len();
             if stage == Stage::Play {
                 num_enemies_shot += before - after;
+            }
+            if before - after > 0 {
+                if let Some(sound) = hit_sounds.get(gen_range(0, hit_sounds.len())) {
+                    play_sound_once(sound);
+                }
             }
         });
 

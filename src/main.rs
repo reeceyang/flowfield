@@ -255,6 +255,9 @@ async fn main() {
 
     let mut hit_sounds: Vec<Sound> = vec![];
     load_hit_sounds(&mut hit_sounds).await;
+    let shoot_sound = audio::load_sound("sfx/shot.wav").await.ok();
+    let start_sound = audio::load_sound("sfx/start.wav").await.ok();
+    let end_sound = audio::load_sound("sfx/end.wav").await.ok();
 
     loop {
         let dt = get_frame_time();
@@ -292,6 +295,9 @@ async fn main() {
             projectiles.push(Body::new(player.pos, init_vel, Vec2::ZERO));
             if stage == Stage::Play {
                 num_projectiles += 1;
+            }
+            if let Some(shoot_sound) = &shoot_sound {
+                play_sound_once(shoot_sound);
             }
         }
 
@@ -384,6 +390,9 @@ async fn main() {
 
             secs_left -= dt;
             if secs_left <= 0.0 {
+                if let Some(end_sound) = &end_sound {
+                    play_sound_once(end_sound)
+                }
                 stage = Stage::End;
             }
         }
@@ -400,6 +409,9 @@ async fn main() {
                 num_enemies_shot = 0;
                 num_projectiles = 0;
                 enemies = vec![];
+                if let Some(start_sound) = &start_sound {
+                    play_sound_once(start_sound)
+                }
             }
             const SESSION_BEST_Y: f32 = 480.0;
             draw_score_at("session best:", 80.0, SESSION_BEST_Y - 12.0, font.as_ref());

@@ -2,10 +2,12 @@ use std::collections::HashMap;
 
 use macroquad::prelude::*;
 use macroquad::rand::*;
+use macroquad::ui::hash;
 use macroquad::ui::root_ui;
 use noise::NoiseFn;
 use noise::OpenSimplex;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use serde_json::Value;
 
 // there's a menu
@@ -236,6 +238,10 @@ async fn main() {
     let mut num_projectiles = 0;
     let mut num_enemies_shot = 0;
 
+    let mut player_initials: String = String::new();
+    let reqwest_client = reqwest::blocking::Client::new();
+    let mut score_submitted = false;
+
     loop {
         let dt = get_frame_time();
         clear_background(Color::from_hex(0xFEFAE0));
@@ -365,8 +371,11 @@ async fn main() {
 
         if stage == Stage::Home {
             draw_text_at("flowfield", 80.0, 200.0, 100, font.as_ref());
-            draw_text_ll("choose a field", 80.0, 310.0, font.as_ref());
-            if root_ui().button(Some(Vec2::new(80.0, 500.0)), "play") {
+            draw_text_ll("choose a field:", 80.0, 310.0, font.as_ref());
+            if root_ui().button(
+                Some(Vec2::new(80.0, 500.0)),
+                format!("play ({})", current_map),
+            ) {
                 stage = Stage::Play;
                 secs_left = GAME_TIME_SECS;
                 num_enemies_shot = 0;
@@ -374,7 +383,9 @@ async fn main() {
                 enemies = vec![];
             }
             const SESSION_BEST_Y: f32 = 480.0;
-            draw_score_at("session best:", 5.0, SESSION_BEST_Y, font.as_ref());
+            draw_score_at("session best:", 80.0, SESSION_BEST_Y - 12.0, font.as_ref());
+            draw_score_at("session best:", 240.0, SESSION_BEST_Y - 12.0, font.as_ref());
+            draw_score_at("session best:", 400.0, SESSION_BEST_Y - 12.0, font.as_ref());
 
             if root_ui().button(Some(Vec2::new(80.0, 300.0)), DUAL_VISION) {
                 current_map = DUAL_VISION;
@@ -398,6 +409,11 @@ async fn main() {
                 .get(CURL_VALLEY)
                 .map_or("unplayed".to_owned(), |score| format!("{}", score));
             draw_score_at(score, 240.0, SESSION_BEST_Y, font.as_ref());
+            draw_top_scores(
+                top_scores.get(CURL_VALLEY).unwrap_or(&vec![]),
+                240.0,
+                font.as_ref(),
+            );
 
             if root_ui().button(Some(Vec2::new(400.0, 300.0)), CLOCKBACK) {
                 current_map = CLOCKBACK;
@@ -407,6 +423,11 @@ async fn main() {
                 .get(CLOCKBACK)
                 .map_or("unplayed".to_owned(), |score| format!("{}", score));
             draw_score_at(score, 400.0, SESSION_BEST_Y, font.as_ref());
+            draw_top_scores(
+                top_scores.get(CLOCKBACK).unwrap_or(&vec![]),
+                400.0,
+                font.as_ref(),
+            );
 
             draw_text_ll(
                 "WASD to move, point and click to shoot",
@@ -414,6 +435,10 @@ async fn main() {
                 screen_height(),
                 font.as_ref(),
             );
+        }
+
+        if stage == Stage::Play {
+            score_submitted = false;
         }
 
         if stage == Stage::End {
@@ -439,6 +464,34 @@ async fn main() {
                 500.0,
                 font.as_ref(),
             );
+            if !score_submitted {
+                root_ui().window(hash!(), Vec2::new(80., 520.), Vec2::new(450., 25.), |ui| {
+                    ui.input_text(hash!(), "enter initals", &mut player_initials);
+                });
+                player_initials = player_initials.chars().take(2).collect();
+
+                if root_ui().button(Some(Vec2::new(80.0, 550.0)), "submit score") {
+                    let json = json!({
+                        "map": current_map,
+                        "name": player_initials,
+                        "score": final_score,
+                    });
+                    if let Ok(result) = reqwest_client
+                        .post("https://basic-hound-665.convex.site/newScore")
+                        .body(json.to_string())
+                        .send()
+                    {
+                        if result.status().is_success() {
+                            score_submitted = true;
+                            let _ = get_scores(&mut top_scores);
+                        }
+                    }
+                }
+            }
+
+            if score_submitted {
+                draw_text_ul("score submitted", 80.0, 550.0, font.as_ref())
+            }
 
             if root_ui().button(Some(Vec2::new(80.0, 600.0)), "continue") {
                 stage = Stage::Home;

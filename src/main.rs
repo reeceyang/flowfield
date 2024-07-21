@@ -218,16 +218,47 @@ fn draw_top_scores(scores: &Vec<Score>, x: f32, font: Option<&Font>) {
 }
 
 async fn load_hit_sounds(sounds: &mut Vec<Sound>) {
-    for i in 1..(12 + 1) {
-        if let Ok(sound) = audio::load_sound(&format!("sfx/hit {}.wav", i)).await {
-            sounds.push(sound)
-        }
+    if let Ok(sound) = audio::load_sound_from_bytes(include_bytes!("../sfx/hit 1.wav")).await {
+        sounds.push(sound)
+    }
+    if let Ok(sound) = audio::load_sound_from_bytes(include_bytes!("../sfx/hit 2.wav")).await {
+        sounds.push(sound)
+    }
+    if let Ok(sound) = audio::load_sound_from_bytes(include_bytes!("../sfx/hit 3.wav")).await {
+        sounds.push(sound)
+    }
+    if let Ok(sound) = audio::load_sound_from_bytes(include_bytes!("../sfx/hit 4.wav")).await {
+        sounds.push(sound)
+    }
+    if let Ok(sound) = audio::load_sound_from_bytes(include_bytes!("../sfx/hit 5.wav")).await {
+        sounds.push(sound)
+    }
+    if let Ok(sound) = audio::load_sound_from_bytes(include_bytes!("../sfx/hit 6.wav")).await {
+        sounds.push(sound)
+    }
+    if let Ok(sound) = audio::load_sound_from_bytes(include_bytes!("../sfx/hit 7.wav")).await {
+        sounds.push(sound)
+    }
+    if let Ok(sound) = audio::load_sound_from_bytes(include_bytes!("../sfx/hit 8.wav")).await {
+        sounds.push(sound)
+    }
+    if let Ok(sound) = audio::load_sound_from_bytes(include_bytes!("../sfx/hit 9.wav")).await {
+        sounds.push(sound)
+    }
+    if let Ok(sound) = audio::load_sound_from_bytes(include_bytes!("../sfx/hit 10.wav")).await {
+        sounds.push(sound)
+    }
+    if let Ok(sound) = audio::load_sound_from_bytes(include_bytes!("../sfx/hit 11.wav")).await {
+        sounds.push(sound)
+    }
+    if let Ok(sound) = audio::load_sound_from_bytes(include_bytes!("../sfx/hit 12.wav")).await {
+        sounds.push(sound)
     }
 }
 
 #[macroquad::main("flowfield")]
 async fn main() {
-    let font = load_ttf_font("./DMSans-Regular.ttf").await.ok();
+    let font = load_ttf_font_from_bytes(include_bytes!("../DMSans-Regular.ttf")).ok();
     set_fullscreen(true);
 
     let mut session_best_scores: HashMap<&'static str, i32> = HashMap::new();
@@ -256,10 +287,18 @@ async fn main() {
 
     let mut hit_sounds: Vec<Sound> = vec![];
     load_hit_sounds(&mut hit_sounds).await;
-    let shoot_sound = audio::load_sound("sfx/shot.wav").await.ok();
-    let start_sound = audio::load_sound("sfx/start.wav").await.ok();
-    let end_sound = audio::load_sound("sfx/end.wav").await.ok();
-    let collision_sound = audio::load_sound("sfx/collision.wav").await.ok();
+    let shoot_sound = audio::load_sound_from_bytes(include_bytes!("../sfx/shot.wav"))
+        .await
+        .ok();
+    let start_sound = audio::load_sound_from_bytes(include_bytes!("../sfx/start.wav"))
+        .await
+        .ok();
+    let end_sound = audio::load_sound_from_bytes(include_bytes!("../sfx/end.wav"))
+        .await
+        .ok();
+    let collision_sound = audio::load_sound_from_bytes(include_bytes!("../sfx/collision.wav"))
+        .await
+        .ok();
 
     loop {
         let dt = get_frame_time();
@@ -365,7 +404,7 @@ async fn main() {
                 .for_each(|enemy| enemy.update_position(dt));
 
             enemies.retain(|enemy| {
-                if (enemy.pos.distance(player.pos) <= ENEMY_RADIUS) {
+                if enemy.pos.distance(player.pos) <= ENEMY_RADIUS {
                     if let Some(collision_sound) = &collision_sound {
                         play_sound_once(collision_sound);
                     }

@@ -248,6 +248,7 @@ async fn main() {
     let mut enemies: Vec<Body> = vec![];
     let mut num_projectiles = 0;
     let mut num_enemies_shot = 0;
+    let mut num_collisions = 0;
 
     let mut player_initials: String = String::new();
     let reqwest_client = reqwest::blocking::Client::new();
@@ -258,6 +259,7 @@ async fn main() {
     let shoot_sound = audio::load_sound("sfx/shot.wav").await.ok();
     let start_sound = audio::load_sound("sfx/start.wav").await.ok();
     let end_sound = audio::load_sound("sfx/end.wav").await.ok();
+    let collision_sound = audio::load_sound("sfx/collision.wav").await.ok();
 
     loop {
         let dt = get_frame_time();
@@ -363,7 +365,15 @@ async fn main() {
                 .for_each(|enemy| enemy.update_position(dt));
 
             enemies.retain(|enemy| {
-                enemy.pos.distance_squared(player.pos) <= screen_height() * screen_width()
+                if (enemy.pos.distance(player.pos) <= ENEMY_RADIUS) {
+                    if let Some(collision_sound) = &collision_sound {
+                        play_sound_once(collision_sound);
+                    }
+                    num_collisions += 1;
+                    return false;
+                }
+                enemy.pos.distance_squared(player.pos)
+                    <= screen_height() * screen_height() + screen_width() * screen_width()
             });
 
             enemies.iter().for_each(|enemy| {
@@ -408,6 +418,7 @@ async fn main() {
                 secs_left = GAME_TIME_SECS;
                 num_enemies_shot = 0;
                 num_projectiles = 0;
+                num_collisions = 0;
                 enemies = vec![];
                 if let Some(start_sound) = &start_sound {
                     play_sound_once(start_sound)
@@ -473,7 +484,8 @@ async fn main() {
         }
 
         if stage == Stage::End {
-            let final_score = 100 * (num_enemies_shot as i32) - num_projectiles;
+            let final_score =
+                100 * (num_enemies_shot as i32) - num_projectiles - 100 * (num_collisions);
             let previous = session_best_scores.get(current_map).unwrap_or(&i32::MIN);
             session_best_scores.insert(current_map, final_score.max(*previous));
             draw_text_at("game over", 80.0, 200.0, 100, font.as_ref());
@@ -486,13 +498,19 @@ async fn main() {
             draw_text_ul(
                 &format!("projectiles used -1 x {}", num_projectiles),
                 80.0,
+                350.0,
+                font.as_ref(),
+            );
+            draw_text_ul(
+                &format!("enemy collisions -100 x {}", num_collisions),
+                80.0,
                 400.0,
                 font.as_ref(),
             );
             draw_text_ul(
                 &format!("final score {:0}", final_score),
                 80.0,
-                500.0,
+                450.0,
                 font.as_ref(),
             );
             if !score_submitted {

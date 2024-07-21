@@ -5,6 +5,8 @@ use macroquad::rand::*;
 use macroquad::ui::root_ui;
 use noise::NoiseFn;
 use noise::OpenSimplex;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 // there's a menu
 // you can choose different field
@@ -176,12 +178,49 @@ enum Stage {
     End,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+struct Score {
+    map: String,
+    name: String,
+    score: i32,
+}
+
+fn get_scores(top_scores: &mut HashMap<&'static str, Vec<Score>>) -> anyhow::Result<()> {
+    let body = reqwest::blocking::get("https://basic-hound-665.convex.site/topScores")?.text()?;
+    let v: Value = serde_json::from_str(&body)?;
+    for map in [DUAL_VISION, CURL_VALLEY, CLOCKBACK] {
+        let v = &v[map];
+        match v {
+            Value::Array(array) => {
+                let mut scores: Vec<Score> = vec![];
+                for v in array {
+                    let score: Score = serde_json::from_value(v.clone())?;
+                    scores.push(score);
+                }
+                top_scores.insert(map, scores);
+            }
+            _ => (),
+        }
+    }
+    Ok(())
+}
+
+fn draw_top_scores(scores: &Vec<Score>, x: f32, font: Option<&Font>) {
+    scores.iter().enumerate().for_each(|(i, score)| {
+        let text = format!("{}. {:2} {:10}", i + 1, score.name, score.score);
+        draw_score_at(&text, x, 340.0 + (i as f32) * 20.0, font)
+    })
+}
+
 #[macroquad::main("flowfield")]
 async fn main() {
     let font = load_ttf_font("./DMSans-Regular.ttf").await.ok();
     set_fullscreen(true);
 
     let mut session_best_scores: HashMap<&'static str, i32> = HashMap::new();
+    let mut top_scores: HashMap<&'static str, Vec<Score>> = HashMap::new();
+    let _ = get_scores(&mut top_scores);
+
     let mut stage = Stage::Home;
     let mut current_map = DUAL_VISION;
     let mut get_vector_field_force: VectorFieldGetter = get_vector_field_force_basic;
@@ -326,6 +365,7 @@ async fn main() {
 
         if stage == Stage::Home {
             draw_text_at("flowfield", 80.0, 200.0, 100, font.as_ref());
+            draw_text_ll("choose a field", 80.0, 310.0, font.as_ref());
             if root_ui().button(Some(Vec2::new(80.0, 500.0)), "play") {
                 stage = Stage::Play;
                 secs_left = GAME_TIME_SECS;
@@ -333,8 +373,8 @@ async fn main() {
                 num_projectiles = 0;
                 enemies = vec![];
             }
-
-            draw_score_at("session best", 5.0, 400.0, font.as_ref());
+            const SESSION_BEST_Y: f32 = 480.0;
+            draw_score_at("session best:", 5.0, SESSION_BEST_Y, font.as_ref());
 
             if root_ui().button(Some(Vec2::new(80.0, 300.0)), DUAL_VISION) {
                 current_map = DUAL_VISION;
@@ -343,7 +383,12 @@ async fn main() {
             let score = &session_best_scores
                 .get(DUAL_VISION)
                 .map_or("unplayed".to_owned(), |score| format!("{}", score));
-            draw_score_at(score, 80.0, 400.0, font.as_ref());
+            draw_score_at(score, 80.0, SESSION_BEST_Y, font.as_ref());
+            draw_top_scores(
+                top_scores.get(DUAL_VISION).unwrap_or(&vec![]),
+                80.0,
+                font.as_ref(),
+            );
 
             if root_ui().button(Some(Vec2::new(240.0, 300.0)), CURL_VALLEY) {
                 current_map = CURL_VALLEY;
@@ -352,7 +397,7 @@ async fn main() {
             let score = &session_best_scores
                 .get(CURL_VALLEY)
                 .map_or("unplayed".to_owned(), |score| format!("{}", score));
-            draw_score_at(score, 240.0, 400.0, font.as_ref());
+            draw_score_at(score, 240.0, SESSION_BEST_Y, font.as_ref());
 
             if root_ui().button(Some(Vec2::new(400.0, 300.0)), CLOCKBACK) {
                 current_map = CLOCKBACK;
@@ -361,7 +406,7 @@ async fn main() {
             let score = &session_best_scores
                 .get(CLOCKBACK)
                 .map_or("unplayed".to_owned(), |score| format!("{}", score));
-            draw_score_at(score, 400.0, 400.0, font.as_ref());
+            draw_score_at(score, 400.0, SESSION_BEST_Y, font.as_ref());
 
             draw_text_ll(
                 "WASD to move, point and click to shoot",

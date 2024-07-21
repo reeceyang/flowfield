@@ -5,7 +5,11 @@ import { z } from "zod";
 export const Score = z.object({
   name: z.string().max(2),
   score: z.number(),
-  map: z.union([z.literal("dual vision"), z.literal("amogus")]),
+  map: z.union([
+    z.literal("dual vision"),
+    z.literal("clockback"),
+    z.literal("curl valley"),
+  ]),
 });
 
 export default defineSchema({

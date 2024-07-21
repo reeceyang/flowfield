@@ -485,7 +485,7 @@ async fn main() {
 
         if stage == Stage::End {
             let final_score =
-                100 * (num_enemies_shot as i32) - num_projectiles - 100 * (num_collisions);
+                100 * (num_enemies_shot as i32) - num_projectiles - 1000 * (num_collisions);
             let previous = session_best_scores.get(current_map).unwrap_or(&i32::MIN);
             session_best_scores.insert(current_map, final_score.max(*previous));
             draw_text_at("game over", 80.0, 200.0, 100, font.as_ref());
@@ -502,7 +502,7 @@ async fn main() {
                 font.as_ref(),
             );
             draw_text_ul(
-                &format!("enemy collisions -100 x {}", num_collisions),
+                &format!("enemy collisions -1000 x {}", num_collisions),
                 80.0,
                 400.0,
                 font.as_ref(),

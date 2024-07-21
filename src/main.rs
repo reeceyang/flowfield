@@ -5,13 +5,10 @@ use macroquad::audio::play_sound_once;
 use macroquad::audio::Sound;
 use macroquad::prelude::*;
 use macroquad::rand::*;
-use macroquad::ui::hash;
 use macroquad::ui::root_ui;
 use noise::NoiseFn;
 use noise::OpenSimplex;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
-use serde_json::Value;
 
 // there's a menu
 // you can choose different field
@@ -190,26 +187,6 @@ struct Score {
     score: i32,
 }
 
-fn get_scores(top_scores: &mut HashMap<&'static str, Vec<Score>>) -> anyhow::Result<()> {
-    let body = reqwest::blocking::get("https://basic-hound-665.convex.site/topScores")?.text()?;
-    let v: Value = serde_json::from_str(&body)?;
-    for map in [DUAL_VISION, CURL_VALLEY, CLOCKBACK] {
-        let v = &v[map];
-        match v {
-            Value::Array(array) => {
-                let mut scores: Vec<Score> = vec![];
-                for v in array {
-                    let score: Score = serde_json::from_value(v.clone())?;
-                    scores.push(score);
-                }
-                top_scores.insert(map, scores);
-            }
-            _ => (),
-        }
-    }
-    Ok(())
-}
-
 fn draw_top_scores(scores: &Vec<Score>, x: f32, font: Option<&Font>) {
     scores.iter().enumerate().for_each(|(i, score)| {
         let text = format!("{}. {:2} {:10}", i + 1, score.name, score.score);
@@ -263,7 +240,6 @@ async fn main() {
 
     let mut session_best_scores: HashMap<&'static str, i32> = HashMap::new();
     let mut top_scores: HashMap<&'static str, Vec<Score>> = HashMap::new();
-    let _ = get_scores(&mut top_scores);
 
     let mut stage = Stage::Home;
     let mut current_map = DUAL_VISION;
@@ -281,8 +257,6 @@ async fn main() {
     let mut num_enemies_shot = 0;
     let mut num_collisions = 0;
 
-    let mut player_initials: String = String::new();
-    let reqwest_client = reqwest::blocking::Client::new();
     let mut score_submitted = false;
 
     let mut hit_sounds: Vec<Sound> = vec![];
@@ -552,30 +526,29 @@ async fn main() {
                 450.0,
                 font.as_ref(),
             );
-            if !score_submitted {
-                root_ui().window(hash!(), Vec2::new(80., 520.), Vec2::new(450., 25.), |ui| {
-                    ui.input_text(hash!(), "enter initals", &mut player_initials);
-                });
-                player_initials = player_initials.chars().take(2).collect();
+            // if !score_submitted {
+            //     root_ui().window(hash!(), Vec2::new(80., 520.), Vec2::new(450., 25.), |ui| {
+            //         ui.input_text(hash!(), "enter initals", &mut player_initials);
+            //     });
+            //     player_initials = player_initials.chars().take(2).collect();
 
-                if root_ui().button(Some(Vec2::new(80.0, 550.0)), "submit score") {
-                    let json = json!({
-                        "map": current_map,
-                        "name": player_initials,
-                        "score": final_score,
-                    });
-                    if let Ok(result) = reqwest_client
-                        .post("https://basic-hound-665.convex.site/newScore")
-                        .body(json.to_string())
-                        .send()
-                    {
-                        if result.status().is_success() {
-                            score_submitted = true;
-                            let _ = get_scores(&mut top_scores);
-                        }
-                    }
-                }
-            }
+            //     if root_ui().button(Some(Vec2::new(80.0, 550.0)), "submit score") {
+            //         let json = json!({
+            //             "map": current_map,
+            //             "name": player_initials,
+            //             "score": final_score,
+            //         });
+            //         if let Ok(result) = reqwest_client
+            //             .post("https://basic-hound-665.convex.site/newScore")
+            //             .body(json.to_string())
+            //             .send()
+            //         {
+            //             if result.status().is_success() {
+            //                 score_submitted = true;
+            //             }
+            //         }
+            //     }
+            // }
 
             if score_submitted {
                 draw_text_ul("score submitted", 80.0, 550.0, font.as_ref())

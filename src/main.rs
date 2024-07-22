@@ -261,9 +261,10 @@ async fn main() {
 
     let mut hit_sounds: Vec<Sound> = vec![];
     load_hit_sounds(&mut hit_sounds).await;
-    let shoot_sound = audio::load_sound_from_bytes(include_bytes!("../sfx/shot.wav"))
-        .await
-        .ok();
+    // let shoot_sound = audio::load_sound_from_bytes(include_bytes!("../sfx/shot.wav"))
+    //     .await
+    //     .ok();
+    let shoot_sound = None;
     let start_sound = audio::load_sound_from_bytes(include_bytes!("../sfx/start.wav"))
         .await
         .ok();
